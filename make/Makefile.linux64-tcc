@@ -1,0 +1,13 @@
+XFLAGS = -DLINUX -Dx86_64 -Drestrict= -D_GNU_SOURCE -DTCC
+
+ASM_SRCS = asm_linux_x86_64.s
+CONVERT = elf_cvt
+KLD = $(CC) -g -Wl,-nostdlib -Wl,-Ttext=2000000000 -Wl,-section-alignment=1000
+KLIB = tcc/libtcc1.a lib/libgrass.a
+
+TCC = build/tcc/bin
+CC = $(TCC)/tcc
+AS = $(TCC)/tcc -c
+
+build/apps/%.int: build/apps/%.o lib/crt0.o lib/libgrass.a lib/end.o 
+	$(CC) -g -Wl,-nostdlib -Wl,-Ttext=1000000000 -Wl,-section-alignment=1000 -o $@ lib/crt0.o $< lib/libgrass.a tcc/libtcc1.a lib/libgrass.a lib/end.o 

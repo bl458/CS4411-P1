@@ -1,0 +1,75 @@
+: Create release script
+: e.g. cr egos HW_MT HW_MLFQ HW_MEASURE HW_CLOCK HW_FS HW_PAGING
+
+release="$0 $*"
+case $# in
+0)
+	echo Usage $0 'name [keys ...]' >&2
+	exit 1
+	;;
+*)
+	name=$1
+	shift
+	;;
+esac
+
+mkdir -p releases
+if mkdir releases/$name
+then
+	echo creating release $name
+else
+	echo release $name already exists >&2
+	exit 1
+fi
+
+: preparation
+make clean
+make build/tools/cpr
+if test ! -f build/tools/cpr
+then
+	exit 1
+fi
+
+: create a list of all directories and files
+tar cvf /dev/null . 2>&1 |
+		grep -v '\.git' |
+		grep -v win32 |
+		grep -v build/tcc |
+		grep -v src/tcc |
+		grep -v docs/projects |
+		grep -v -e test.cache_test |
+		grep -v -e test.fat_test |
+		grep -v Makefile.fat_test |
+		grep -v releases |
+		grep -v DS_Store |
+		sed 's/^a //' |
+		grep -v -e '^\.$' > /tmp/cr.$$
+
+: first create all directories
+for f in `cat /tmp/cr.$$`
+do
+	if test -d $f
+	then
+		mkdir -p releases/$name/$f
+	fi
+done
+
+: then copy over all files
+for f in `cat /tmp/cr.$$`
+do
+	if test -f $f
+	then
+		case $f in
+		*.[chs])
+			build/tools/cpr $f releases/$name/$f $*
+			;;
+		*.cache_test)
+			build/tools/cpr $f releases/$name/$f $*
+			;;
+		*)
+			cp $f releases/$name/$f
+		esac
+	fi
+done
+
+rm -f /tmp/cr.$$

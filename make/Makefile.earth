@@ -1,0 +1,17 @@
+include src/make/Makefile.common
+
+CFLAGS = $(COMMONFLAGS) -Isrc/h $(XFLAGS)
+
+SRCS = clock.c devdisk.c devgate.c devtty.c devudp.c intf.c intr.c log.c myalloc.c queue.c tlb.c
+OBJS = $(SRCS:%.c=build/earth/%.o) $(ASM_SRCS:%.s=build/earth/%.o) 
+
+all: build/earth/earthbox
+
+build/earth/earthbox: $(OBJS)
+	$(CC) -o $@ -g $(OBJS)
+
+build/earth/%.o: src/earth/%.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+build/earth/%.o: src/lib/%.s
+	$(CC) -c $(CFLAGS) $< -o $@

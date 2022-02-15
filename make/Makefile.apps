@@ -1,0 +1,47 @@
+include src/make/Makefile.common
+
+CFLAGS = $(COMMONFLAGS) $(XFLAGS) -Isrc/include -Isrc/h -Isrc/lib $(ARCHFLAGS) -DGRASS
+
+.SUFFIXES: .exe .int .a
+
+LIB_SRCS = ctype.c dir.c exec.c gate.c libgen.c getopt.c map.c math.c memchan.c print.c qsort.c scanf.c setjmp.c sha256.c stdio.c stdlib.c string.c syscall.c time.c tlsf.c unistd.c block.c dir.c ema.c file.c malloc.c map.c queue.c spawn.c errno.c
+BLOCK_SRCS = checkdisk.c clockdisk.c wtclockdisk.c combinedisk.c debugdisk.c fatdisk.c filedisk.c partdisk.c protdisk.c raid0disk.c raid1disk.c ramdisk.c treedisk.c unixdisk.c
+APPS_SRCS = ar.c blocksvr.c car.c cat.c bfs.c cc.c chmod.c cp.c dirsvr.c echo.c ed.c init.c kill.c login.c loop.c ls.c mkdir.c mount.c mt.c passwd.c pull.c push.c pwd.c pwdsvr.c rm.c shell.c shutdown.c sync.c syncsvr.c tcc.c elf_cvt.c
+
+LIB_OBJS = $(ASM_SRCS:%.s=build/lib/%.o) $(LIB_SRCS:%.c=build/lib/%.o) $(BLOCK_SRCS:%.c=build/lib/%.o)
+APPS_OBJS = $(APPS_SRCS:%.c=bin/%.exe)
+
+all: $(APPS_OBJS) lib/libgrass.a lib/crt0.o lib/end.o
+
+lib/crt0.o: build/lib/crt0.o
+	cp build/lib/crt0.o lib/crt0.o
+
+lib/end.o: build/lib/end.o
+	cp build/lib/end.o lib/end.o
+
+build/apps/%.o: src/apps/%.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+build/lib/%.o: src/lib/%.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+build/lib/%.o: src/lib/%.s
+	$(CC) -c $(CFLAGS) $< -o $@
+
+build/lib/%.o: src/block/%.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+build/tools/mkfs: src/apps/mkfs.c src/block/filedisk.c src/block/clockdisk.c src/block/treedisk.c src/block/fatdisk.c src/block/unixdisk.c
+	$(CC) -o build/tools/mkfs -Isrc/h src/apps/mkfs.c src/block/filedisk.c src/block/clockdisk.c src/block/treedisk.c src/block/fatdisk.c src/block/unixdisk.c
+
+tcc_install: lib/crt0.o lib/end.o lib/libgrass.a bin/tcc.exe
+	cp lib/crt0.o lib/end.o lib/libgrass.a bin/tcc.exe tcc_build/lib/tcc/libtcc1.a tcc
+
+bin/%.exe: build/apps/%.int build/tools/$(CONVERT)
+	build/tools/$(CONVERT) $< $@
+
+lib/libgrass.a: $(LIB_OBJS)
+	ar -r lib/libgrass.a $(LIB_OBJS)
+	ranlib lib/libgrass.a
+
+-include $(LIB_SRCS:.c=.d)

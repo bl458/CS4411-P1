@@ -1,0 +1,5 @@
+# Your code goes here:
+
+clean:
+	rm -f *.o trace
+	rm -rf trace.dSYM/

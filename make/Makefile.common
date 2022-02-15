@@ -1,0 +1,9 @@
+SNAME := $(shell src/make/sname)
+
+GRASS_DIR = .
+include src/make/Makefile.$(SNAME)
+
+COMMONFLAGS = -g -DGRASS -D_XOPEN_SOURCE -D__x86_64__ -Wall -Wsign-compare -DEMA -DTLSF -DHW_MLFQ -DHW_MEASURE -DHW_PAGING
+
+build/tools/$(CONVERT): src/apps/$(CONVERT).c
+	$(CC) -o build/tools/$(CONVERT) $(COMMONFLAGS) $(XFLAGS) -Isrc/lib src/apps/$(CONVERT).c

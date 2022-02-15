@@ -1,0 +1,15 @@
+case `uname` in
+Linux)
+	if test -f build/tcc/bin/tcc
+	then
+		echo linux64-tcc
+	else
+		echo linux64-gcc
+	fi
+	;;
+Darwin)
+	echo macos64
+	;;
+*)
+	echo unknown
+esac

@@ -1,0 +1,10 @@
+XFLAGS = -DLINUX -Dx86_64 -Drestrict= -fno-stack-protector -MMD -MP -D_GNU_SOURCE
+ARCHFLAGS = -mcmodel=large
+
+ASM_SRCS = asm_linux_x86_64.s
+CONVERT = elf_cvt
+KLD = ld -T src/tools/kernel64.ld
+KLIB =
+
+build/apps/%.int: build/apps/%.o lib/crt0.o lib/libgrass.a lib/end.o 
+	ld -T src/tools/process64.ld -o $@ lib/crt0.o $< lib/libgrass.a lib/end.o 

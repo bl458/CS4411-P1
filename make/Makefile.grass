@@ -1,0 +1,27 @@
+include src/make/Makefile.common
+
+CFLAGS = $(COMMONFLAGS) $(XFLAGS) -Isrc/include -Isrc/h -Isrc/lib $(ARCHFLAGS) -DNO_UCONTEXT -DGRASS
+# -fno-stack-protector -fno-stack-check
+
+GRASS_SRCS = disksvr.c gatesvr.c main.c process.c procsys.c ramfilesvr.c spawnsvr.c ttysvr.c
+KERNEL_SRCS = $(GRASS_SRCS)
+K_SRCS = $(GRASS_SRCS)
+CSRCS = $(KERNEL_SRCS)
+
+K_OBJS = $(K_SRCS:%.c=build/grass/%.o) $(ASM_SRCS:%.s=build/grass/%.o)
+
+all: build/grass/k.exe
+
+build/grass/k.exe: build/grass/k.int build/tools/$(CONVERT)
+	build/tools/$(CONVERT) -b 2000000000 build/grass/k.int $@
+
+build/grass/k.int: build/grass/kcrt0.o $(K_OBJS) lib/libgrass.a lib/end.o
+	$(KLD) -o $@ build/grass/kcrt0.o $(K_OBJS) lib/libgrass.a $(KLIB) lib/end.o 
+
+build/grass/%.o: src/grass/%.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+build/grass/%.o: src/lib/%.s
+	$(CC) -c $(CFLAGS) $< -o $@
+
+-include $(CSRCS:.c=.d)
