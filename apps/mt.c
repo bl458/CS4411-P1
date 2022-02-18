@@ -18,6 +18,7 @@ typedef struct thread
   void *base;
   void *stack_ptr;
   void *function;
+  void *arg;
 } * thread_t;
 
 typedef struct sema
@@ -28,9 +29,16 @@ typedef struct sema
 struct queue;
 
 // Global variables
-thread_t init_thread;
 thread_t current_thread;
 struct queue *run_queue;
+
+//Helpers
+void ctx_entry()
+{
+  void (*f)(void *arg) = current_thread->function;
+  f(current_thread->arg);
+  thread_exit();
+}
 
 // Thread functions
 void thread_init()
@@ -38,7 +46,6 @@ void thread_init()
   current_thread = (thread_t)malloc(sizeof(struct thread));
   run_queue = (struct queue *)malloc(sizeof(struct queue));
   current_thread->base = NULL;
-  current_thread->stack_ptr = &current_thread;
 }
 
 void thread_create(void (*f)(void *arg), void *arg, unsigned int stacksize)
@@ -47,17 +54,14 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stacksize)
   current_thread->status = 1;
   queue_add(run_queue, current_thread);
   thread_t new_thread = (thread_t)malloc(sizeof(struct thread));
-  new_thread->function = f;
-  new_thread->stack_ptr = malloc(stacksize);
   new_thread->status = 0;
-  // TODO what is old and new sp?
+  new_thread->base = malloc(stacksize);
+  new_thread->stack_ptr = (int)new_thread->base + stacksize;
+  new_thread->function = f;
+  new_thread->arg = arg;
   void *old_ptr = current_thread->stack_ptr;
-  ctx_start(old_ptr, new_thread->stack_ptr);
-  // TODO what is top and bottom?
-  // TODO how do we execute f with arg?
-  // TODO ctx_entry?
   current_thread = new_thread;
-  f(arg);
+  ctx_start(&old_ptr, new_thread->stack_ptr);
 }
 
 void thread_yield()
@@ -71,7 +75,7 @@ void thread_yield()
   queue_add(run_queue, current_thread);
   thread_t next_thread = queue_get(run_queue);
   next_thread->status = 0;
-  ctx_switch(current_thread->stack_ptr, next_thread->stack_ptr);
+  ctx_switch(&current_thread->stack_ptr, next_thread->stack_ptr);
   current_thread = next_thread;
 }
 
@@ -79,6 +83,8 @@ void thread_exit()
 {
   if (queue_size(run_queue) == 0)
   {
+    free(current_thread);
+    free(run_queue);
     exit(0);
   }
 
@@ -88,7 +94,7 @@ void thread_exit()
   next_thread->status = 0;
   ctx_switch(current_thread->stack_ptr, next_thread->stack_ptr);
   current_thread = next_thread;
-  // TODO how do we clean up the old thread?
+  free(old_thread->base);
   free(old_thread);
 }
 
@@ -106,7 +112,6 @@ int main(int argc, char **argv)
 {
   thread_init();
   printf("########### \n");
-  // your code here
   thread_exit();
   return 0;
 }
