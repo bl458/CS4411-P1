@@ -40,6 +40,9 @@ struct queue;
 thread_t current_thread;
 thread_t next_thread;
 struct queue *run_queue;
+int num_blocked_threads = 0;
+
+void thread_exit();
 
 /* Helpers */
 void ctx_entry()
@@ -73,7 +76,7 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stacksize)
   next_thread = new_thread;
   thread_t old_thread = current_thread;
   current_thread = next_thread;
-  ctx_start(&old_thread->stack_ptr, current_thread->stack_ptr);
+  ctx_start((address_t*)&old_thread->stack_ptr, (address_t)current_thread->stack_ptr);
   if (current_thread->status == TERMINATED)
   {
     free(current_thread->base);
@@ -87,6 +90,10 @@ void thread_yield()
 {
   if (queue_size(run_queue) == 0)
   {
+    if (current_thread->status == BLOCKED) {
+      exit(1);
+    }
+
     return;
   }
 
@@ -99,7 +106,7 @@ void thread_yield()
 
   thread_t popped_thread = queue_get(run_queue);
   next_thread = popped_thread;
-  ctx_switch(&current_thread->stack_ptr, popped_thread->stack_ptr);
+  ctx_switch((address_t*)&current_thread->stack_ptr, (address_t)popped_thread->stack_ptr);
   if (current_thread->status == TERMINATED)
   {
     free(current_thread->base);
@@ -115,6 +122,10 @@ void thread_exit()
   {
     free(current_thread);
     free(run_queue);
+    if (num_blocked_threads > 0) {
+      exit(1);
+    }
+
     exit(0);
   }
 
@@ -122,7 +133,7 @@ void thread_exit()
   thread_t popped_thread = queue_get(run_queue);
   popped_thread->status = RUNNING;
   next_thread = popped_thread;
-  ctx_switch(current_thread->stack_ptr, popped_thread->stack_ptr);
+  ctx_switch((address_t*)&current_thread->stack_ptr, (address_t)popped_thread->stack_ptr);
 }
 
 /* Sema functions */
@@ -139,6 +150,7 @@ void sema_dec(struct sema *sema)
   {
     queue_add(sema->blocked_queue, current_thread);
     current_thread->status = BLOCKED;
+    num_blocked_threads++;
     thread_yield();
     return;
   }
@@ -152,6 +164,7 @@ void sema_inc(struct sema *sema)
   {
     thread_t thread = queue_get(sema->blocked_queue);
     thread->status = RUNNABLE;
+    num_blocked_threads--;
     queue_add(run_queue, thread);
     return;
   }
@@ -186,25 +199,18 @@ static unsigned int in, out;
 static char *slots[NSLOTS];
 static void producer(void *arg)
 {
-  printf("Entered producer 1\n");
   for (;;)
   {
-    printf("Before Sema_dec1\n");
     // first make sure there’s an empty slot.
     sema_dec(&s_empty);
-    printf("Before Sema_dec2\n");
     // now add an entry to the queue
     sema_dec(&s_lock);
-    printf("Before Sema_dec2\n");
     slots[in++] = arg;
     if (in == NSLOTS)
       in = 0;
-    printf("Before sema_inc1\n");
     sema_inc(&s_lock);
     // finally, signal consumers
-    printf("Before sema_inc2\n");
     sema_inc(&s_full);
-    printf("\n");
   }
 }
 static void consumer(void *arg)
@@ -225,16 +231,19 @@ static void consumer(void *arg)
     sema_inc(&s_empty);
   }
 }
-int main(int argc, char **argv)
-{
+
+void test_producer() {
   thread_init();
   sema_init(&s_lock, 1);
   sema_init(&s_full, 0);
   sema_init(&s_empty, NSLOTS);
   thread_create(consumer, "consumer 1", 16 * 1024);
-  printf("Before producer 1\n");
   producer("producer 1");
-  printf("After producer 1\n");
   thread_exit();
+}
+
+int main(int argc, char **argv)
+{
+  test_producer();
   return 0;
 }
