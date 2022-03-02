@@ -44,7 +44,6 @@ struct queue *run_queue;
 /* Helpers */
 void ctx_entry()
 {
-
   void (*f)(void *arg) = current_thread->function;
   f(current_thread->arg);
   thread_exit();
@@ -56,6 +55,7 @@ void thread_init()
   current_thread = (thread_t)malloc(sizeof(struct thread));
   next_thread = (thread_t)malloc(sizeof(struct thread));
   run_queue = (struct queue *)malloc(sizeof(struct queue));
+  queue_init(run_queue);
   current_thread->base = NULL;
 }
 
@@ -67,13 +67,13 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stacksize)
   thread_t new_thread = (thread_t)malloc(sizeof(struct thread));
   new_thread->status = RUNNING;
   new_thread->base = malloc(stacksize);
-  new_thread->stack_ptr = (int)new_thread->base + stacksize;
+  new_thread->stack_ptr = new_thread->base + stacksize;
   new_thread->function = f;
   new_thread->arg = arg;
-  void *old_ptr = current_thread->stack_ptr;
   next_thread = new_thread;
+  thread_t old_thread = current_thread;
   current_thread = next_thread;
-  ctx_start(&old_ptr, new_thread->stack_ptr);
+  ctx_start(&old_thread->stack_ptr, current_thread->stack_ptr);
   if (current_thread->status == TERMINATED)
   {
     free(current_thread->base);
@@ -130,6 +130,7 @@ void sema_init(struct sema *sema, unsigned int count)
 {
   sema->count = count;
   sema->blocked_queue = (struct queue *)malloc(sizeof(struct queue));
+  queue_init(sema->blocked_queue);
 }
 
 void sema_dec(struct sema *sema)
@@ -171,10 +172,69 @@ bool sema_release(struct sema *sema)
 }
 
 /**** TEST SUITE ****/
+// int main(int argc, char **argv)
+// {
+//   thread_init();
+//   printf("########### \n");
+//   thread_exit();
+//   return 0;
+// }
+
+#define NSLOTS 3
+static struct sema s_empty, s_full, s_lock;
+static unsigned int in, out;
+static char *slots[NSLOTS];
+static void producer(void *arg)
+{
+  printf("Entered producer 1\n");
+  for (;;)
+  {
+    printf("Before Sema_dec1\n");
+    // first make sure there’s an empty slot.
+    sema_dec(&s_empty);
+    printf("Before Sema_dec2\n");
+    // now add an entry to the queue
+    sema_dec(&s_lock);
+    printf("Before Sema_dec2\n");
+    slots[in++] = arg;
+    if (in == NSLOTS)
+      in = 0;
+    printf("Before sema_inc1\n");
+    sema_inc(&s_lock);
+    // finally, signal consumers
+    printf("Before sema_inc2\n");
+    sema_inc(&s_full);
+    printf("\n");
+  }
+}
+static void consumer(void *arg)
+{
+  unsigned int i;
+  for (i = 0; i < 5; i++)
+  {
+    // first make sure there’s something in the buffer
+    sema_dec(&s_full);
+    // now grab an entry to the queue
+    sema_dec(&s_lock);
+    void *x = slots[out++];
+    printf("%s: got ’%s’\n", arg, x);
+    if (out == NSLOTS)
+      out = 0;
+    sema_inc(&s_lock);
+    // finally, signal producers
+    sema_inc(&s_empty);
+  }
+}
 int main(int argc, char **argv)
 {
   thread_init();
-  printf("########### \n");
+  sema_init(&s_lock, 1);
+  sema_init(&s_full, 0);
+  sema_init(&s_empty, NSLOTS);
+  thread_create(consumer, "consumer 1", 16 * 1024);
+  printf("Before producer 1\n");
+  producer("producer 1");
+  printf("After producer 1\n");
   thread_exit();
   return 0;
 }
