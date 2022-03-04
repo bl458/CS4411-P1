@@ -327,7 +327,7 @@ static void customer(void *arg) {
   } else {
     // printf("%s, freeing seats when no more waiting space\n", arg);
     sema_inc(&s_seats);
-    printf("%s left because no more waiting space\n", arg);
+    // printf("%s left because no more waiting space\n", arg);
   }
 }
 
@@ -383,16 +383,20 @@ void test_sleeping_barber2() {
     thread_yield();
   }
 
-  // printf("Current_thread: %p\n", current_thread->arg);
-  // printf("Number of blocked threads: %d\n", num_blocked_threads);
+  if (current_thread->arg != 0) {
+    printf("Current_thread was %p\n. Expected main", current_thread->arg);
+    exit(1);
+  }
 
-  printf("Released: %d\n", sema_release_robust(&s_barber_ready));
-  printf("Released: %d\n", sema_release_robust(&s_cust_waiting));
-  printf("Released: %d\n", sema_release_robust(&s_seats));
+  if (num_blocked_threads != 1) {
+    printf("Number of blocked threads was %d\n. Expected 1",
+           current_thread->arg);
+    exit(1);
+  }
 
-  // printf("Current_thread: %p\n", current_thread->arg);
-  // printf("Number of blocked threads: %d\n", num_blocked_threads);
-  // printf("All customers have cut their hair for test2\n\n");
+  sema_release_robust(&s_barber_ready);
+  sema_release_robust(&s_cust_waiting);
+  sema_release_robust(&s_seats);
 }
 
 //# barber = 1, # customers = # free seats
@@ -410,16 +414,20 @@ void test_sleeping_barber3() {
     thread_yield();
   }
 
-  // printf("Current_thread: %p\n", current_thread->arg);
-  // printf("Number of blocked threads: %d\n", num_blocked_threads);
+  if (current_thread->arg != 0) {
+    printf("Current_thread was %p\n. Expected main", current_thread->arg);
+    exit(1);
+  }
 
-  printf("Released: %d\n", sema_release_robust(&s_barber_ready));
-  printf("Released: %d\n", sema_release_robust(&s_cust_waiting));
-  printf("Released: %d\n", sema_release_robust(&s_seats));
+  if (num_blocked_threads != 1) {
+    printf("Number of blocked threads was %d\n. Expected 1",
+           current_thread->arg);
+    exit(1);
+  }
 
-  // printf("Current_thread: %p\n", current_thread->arg);
-  // printf("Number of blocked threads: %d\n", num_blocked_threads);
-  // printf("All customers have cut their hair for test3\n\n");
+  sema_release_robust(&s_barber_ready);
+  sema_release_robust(&s_cust_waiting);
+  sema_release_robust(&s_seats);
 }
 
 //# barber = 1, # customers > # free seats = 4
@@ -439,31 +447,31 @@ void test_sleeping_barber4() {
     thread_yield();
   }
 
-  // printf("Current_thread: %p\n", current_thread->arg);
-  // printf("Number of blocked threads: %d\n", num_blocked_threads);
+  if (current_thread->arg != 0) {
+    printf("Current_thread was %p\n. Expected main", current_thread->arg);
+    exit(1);
+  }
 
-  printf("Released: %d\n", sema_release_robust(&s_barber_ready));
-  printf("Released: %d\n", sema_release_robust(&s_cust_waiting));
-  printf("Released: %d\n", sema_release_robust(&s_seats));
+  if (num_blocked_threads != 1) {
+    printf("Number of blocked threads was %d\n. Expected 1",
+           current_thread->arg);
+    exit(1);
+  }
 
-  // printf("Current_thread: %p\n", current_thread->arg);
-  // printf("Number of blocked threads: %d\n", num_blocked_threads);
-  // printf("All customers have cut their hair for test4\n\n");
+  sema_release_robust(&s_barber_ready);
+  sema_release_robust(&s_cust_waiting);
+  sema_release_robust(&s_seats);
 }
 
 void test_sleeping_barber() {
   test_sleeping_barber1();
-  // test_sleeping_barber2();
-  // test_sleeping_barber3();
-  // test_sleeping_barber4();
+  test_sleeping_barber2();
+  test_sleeping_barber3();
+  test_sleeping_barber4();
 }
 
 int main(int argc, char **argv) {
   thread_init();
-  // test_producer1();
-  // test_producer2();
-  // test_producer3();
-  // test_producer4();
   test_sleeping_barber();
   thread_exit();
   return 0;
