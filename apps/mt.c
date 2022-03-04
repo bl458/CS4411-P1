@@ -120,7 +120,6 @@ void thread_yield() {
 void thread_exit() {
   // printf("thread_exit with old: %p\n", current_thread->arg);
   if (queue_empty(run_queue)) {
-    thread_release(zombie_thread);
     free(run_queue);
     if (num_blocked_threads > 0) {
       printf("Thread_exit called with blocked threads remaining\n");
@@ -224,7 +223,7 @@ void test_producer1() {
   sema_init(&s_empty, NSLOTS);
   thread_create(producer, "producer 1", 16 * 1024);
   thread_create(consumer, "consumer 1", 16 * 1024);
-  //consumer("consumer 1");
+  // consumer("consumer 1");
   printf("\n");
 
   sema_release(&s_empty);
@@ -239,9 +238,9 @@ void test_producer2() {
   sema_init(&s_empty, NSLOTS);
   thread_create(producer, "producer 1", 16 * 1024);
   thread_create(consumer, "consumer 1", 16 * 1024);
-  //thread_create(consumer, "consumer 2", 16 * 1024);
+  // thread_create(consumer, "consumer 2", 16 * 1024);
 
-  //consumer("consumer 1");
+  // consumer("consumer 1");
   consumer("consumer 2");
   printf("\n");
 
@@ -250,18 +249,17 @@ void test_producer2() {
   sema_release(&s_lock);
 }
 
-
 void test_producer3() {
   printf("Producer, consumer3\n");
   sema_init(&s_lock, 1);
   sema_init(&s_full, 0);
   sema_init(&s_empty, NSLOTS);
   thread_create(producer, "producer 1", 16 * 1024);
-  //thread_create(producer, "producer 2", 16 * 1024);
-  
+  // thread_create(producer, "producer 2", 16 * 1024);
+
   thread_create(consumer, "consumer 1", 16 * 1024);
 
-  //consumer("consumer 1");
+  // consumer("consumer 1");
   producer("producer 2");
   printf("\n");
 
@@ -276,13 +274,12 @@ void test_producer4() {
   sema_init(&s_full, 0);
   sema_init(&s_empty, NSLOTS);
   thread_create(producer, "producer 1", 16 * 1024);
-  //thread_create(producer, "producer 2", 16 * 1024);
+  // thread_create(producer, "producer 2", 16 * 1024);
   thread_create(consumer, "consumer 1", 16 * 1024);
   thread_create(consumer, "consumer 2", 16 * 1024);
 
-
-  //consumer("consumer 1");
-  //consumer("consumer 2");
+  // consumer("consumer 1");
+  // consumer("consumer 2");
   producer("producer 2");
   printf("\n");
 
@@ -367,6 +364,10 @@ void test_sleeping_barber1() {
            current_thread->arg);
     exit(1);
   }
+
+  sema_release_robust(&s_barber_ready);
+  sema_release_robust(&s_cust_waiting);
+  sema_release_robust(&s_seats);
 }
 
 //# barber = 1, # customer = 2
@@ -462,7 +463,7 @@ int main(int argc, char **argv) {
   // test_producer1();
   // test_producer2();
   // test_producer3();
-  //test_producer4();
+  // test_producer4();
   test_sleeping_barber();
   thread_exit();
   return 0;
