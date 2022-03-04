@@ -46,6 +46,14 @@ void ctx_entry() {
 }
 
 /* Thread functions */
+void thread_release(thread_t thread) {
+  if (thread->base != NULL) {
+    free(thread->base);
+  }
+
+  free(thread);
+}
+
 void thread_init() {
   current_thread = (thread_t)malloc(sizeof(struct thread));
   zombie_thread = NULL;
@@ -75,11 +83,7 @@ void thread_create(void (*f)(void *arg), void *arg, unsigned int stacksize) {
             (address_t)new_thread->stack_ptr);
 
   if (zombie_thread != NULL) {
-    if (zombie_thread->base != NULL) {
-      free(zombie_thread->base);
-    }
-
-    free(zombie_thread);
+    thread_release(zombie_thread);
     zombie_thread = NULL;
   }
 }
@@ -108,11 +112,7 @@ void thread_yield() {
              (address_t)popped_thread->stack_ptr);
 
   if (zombie_thread != NULL) {
-    if (zombie_thread->base != NULL) {
-      free(zombie_thread->base);
-    }
-
-    free(zombie_thread);
+    thread_release(zombie_thread);
     zombie_thread = NULL;
   }
 }
@@ -120,7 +120,7 @@ void thread_yield() {
 void thread_exit() {
   // printf("thread_exit with old: %p\n", current_thread->arg);
   if (queue_empty(run_queue)) {
-    free(current_thread);
+    thread_release(zombie_thread);
     free(run_queue);
     if (num_blocked_threads > 0) {
       printf("Thread_exit called with blocked threads remaining\n");
@@ -192,7 +192,7 @@ static unsigned int in, out;
 static char *slots[NSLOTS];
 static void producer(void *arg) {
   unsigned int i;
-  for (i = 0; i < 5; i++) {
+  for (;;) {
     sema_dec(&s_empty);
     sema_dec(&s_lock);
     slots[in++] = arg;
@@ -217,13 +217,73 @@ static void consumer(void *arg) {
   }
 }
 
-void test_producer() {
-  printf("Producer, consumer\n");
+void test_producer1() {
+  printf("Producer, consumer1\n");
   sema_init(&s_lock, 1);
   sema_init(&s_full, 0);
   sema_init(&s_empty, NSLOTS);
   thread_create(producer, "producer 1", 16 * 1024);
-  consumer("consumer 1");
+  thread_create(consumer, "consumer 1", 16 * 1024);
+  //consumer("consumer 1");
+  printf("\n");
+
+  sema_release(&s_empty);
+  sema_release(&s_full);
+  sema_release(&s_lock);
+}
+
+void test_producer2() {
+  printf("Producer, consumer2\n");
+  sema_init(&s_lock, 1);
+  sema_init(&s_full, 0);
+  sema_init(&s_empty, NSLOTS);
+  thread_create(producer, "producer 1", 16 * 1024);
+  thread_create(consumer, "consumer 1", 16 * 1024);
+  //thread_create(consumer, "consumer 2", 16 * 1024);
+
+  //consumer("consumer 1");
+  consumer("consumer 2");
+  printf("\n");
+
+  sema_release(&s_empty);
+  sema_release(&s_full);
+  sema_release(&s_lock);
+}
+
+
+void test_producer3() {
+  printf("Producer, consumer3\n");
+  sema_init(&s_lock, 1);
+  sema_init(&s_full, 0);
+  sema_init(&s_empty, NSLOTS);
+  thread_create(producer, "producer 1", 16 * 1024);
+  //thread_create(producer, "producer 2", 16 * 1024);
+  
+  thread_create(consumer, "consumer 1", 16 * 1024);
+
+  //consumer("consumer 1");
+  producer("producer 2");
+  printf("\n");
+
+  sema_release(&s_empty);
+  sema_release(&s_full);
+  sema_release(&s_lock);
+}
+
+void test_producer4() {
+  printf("Producer, consumer4\n");
+  sema_init(&s_lock, 1);
+  sema_init(&s_full, 0);
+  sema_init(&s_empty, NSLOTS);
+  thread_create(producer, "producer 1", 16 * 1024);
+  //thread_create(producer, "producer 2", 16 * 1024);
+  thread_create(consumer, "consumer 1", 16 * 1024);
+  thread_create(consumer, "consumer 2", 16 * 1024);
+
+
+  //consumer("consumer 1");
+  //consumer("consumer 2");
+  producer("producer 2");
   printf("\n");
 
   sema_release(&s_empty);
@@ -274,9 +334,19 @@ static void customer(void *arg) {
   }
 }
 
+// Releases the threads in blocked queue if there are threads blocked
+// Only for preventing memory leak in testing
+bool sema_release_robust(struct sema *sema) {
+  while (queue_size(sema->blocked_queue) > 0) {
+    thread_release(queue_get(sema->blocked_queue));
+    num_blocked_threads--;
+  }
+
+  return sema_release(sema);
+}
+
 //# barber = 1, # customer = 1
 void test_sleeping_barber1() {
-  printf("Sleeping Barber1\n");
   sema_init(&s_barber_ready, 1);
   sema_init(&s_cust_waiting, 0);
   sema_init(&s_seats, 1);
@@ -287,15 +357,20 @@ void test_sleeping_barber1() {
     thread_yield();
   }
 
-  printf("Current_thread: %p\n", current_thread->arg);
-  printf("Number of blocked threads: %d\n", num_blocked_threads);
-  printf("All customers have cut their hair for test1\n\n");
-  // thread_exit();
+  if (current_thread->arg != 0) {
+    printf("Current_thread was %p\n. Expected main", current_thread->arg);
+    exit(1);
+  }
+
+  if (num_blocked_threads != 1) {
+    printf("Number of blocked threads was %d\n. Expected 1",
+           current_thread->arg);
+    exit(1);
+  }
 }
 
 //# barber = 1, # customer = 2
 void test_sleeping_barber2() {
-  printf("Sleeping Barber2\n");
   sema_init(&s_barber_ready, 1);
   sema_init(&s_cust_waiting, 0);
   sema_init(&s_seats, 1);
@@ -307,16 +382,20 @@ void test_sleeping_barber2() {
     thread_yield();
   }
 
-  // Expected: current thread: 0,
-  printf("Current_thread: %p\n", current_thread->arg);
-  printf("Number of blocked threads: %d\n", num_blocked_threads);
-  printf("All customers have cut their hair for test2\n\n");
-  // thread_exit();
+  // printf("Current_thread: %p\n", current_thread->arg);
+  // printf("Number of blocked threads: %d\n", num_blocked_threads);
+
+  printf("Released: %d\n", sema_release_robust(&s_barber_ready));
+  printf("Released: %d\n", sema_release_robust(&s_cust_waiting));
+  printf("Released: %d\n", sema_release_robust(&s_seats));
+
+  // printf("Current_thread: %p\n", current_thread->arg);
+  // printf("Number of blocked threads: %d\n", num_blocked_threads);
+  // printf("All customers have cut their hair for test2\n\n");
 }
 
 //# barber = 1, # customers = # free seats
 void test_sleeping_barber3() {
-  printf("Sleeping Barber3\n");
   sema_init(&s_barber_ready, 1);
   sema_init(&s_cust_waiting, 0);
   sema_init(&s_seats, 1);
@@ -330,15 +409,20 @@ void test_sleeping_barber3() {
     thread_yield();
   }
 
-  printf("Current_thread: %p\n", current_thread->arg);
-  printf("Number of blocked threads: %d\n", num_blocked_threads);
-  printf("All customers have cut their hair for test3\n\n");
-  // thread_exit();
+  // printf("Current_thread: %p\n", current_thread->arg);
+  // printf("Number of blocked threads: %d\n", num_blocked_threads);
+
+  printf("Released: %d\n", sema_release_robust(&s_barber_ready));
+  printf("Released: %d\n", sema_release_robust(&s_cust_waiting));
+  printf("Released: %d\n", sema_release_robust(&s_seats));
+
+  // printf("Current_thread: %p\n", current_thread->arg);
+  // printf("Number of blocked threads: %d\n", num_blocked_threads);
+  // printf("All customers have cut their hair for test3\n\n");
 }
 
 //# barber = 1, # customers > # free seats = 4
 void test_sleeping_barber4() {
-  printf("Sleeping Barber4\n");
   sema_init(&s_barber_ready, 1);
   sema_init(&s_cust_waiting, 0);
   sema_init(&s_seats, 1);
@@ -354,26 +438,31 @@ void test_sleeping_barber4() {
     thread_yield();
   }
 
-  printf("Current_thread: %p\n", current_thread->arg);
-  printf("Number of blocked threads: %d\n", num_blocked_threads);
-  printf("Barber has finished cutting hair for test4\n\n");
-  // thread_exit();
+  // printf("Current_thread: %p\n", current_thread->arg);
+  // printf("Number of blocked threads: %d\n", num_blocked_threads);
+
+  printf("Released: %d\n", sema_release_robust(&s_barber_ready));
+  printf("Released: %d\n", sema_release_robust(&s_cust_waiting));
+  printf("Released: %d\n", sema_release_robust(&s_seats));
+
+  // printf("Current_thread: %p\n", current_thread->arg);
+  // printf("Number of blocked threads: %d\n", num_blocked_threads);
+  // printf("All customers have cut their hair for test4\n\n");
 }
 
 void test_sleeping_barber() {
   test_sleeping_barber1();
-  test_sleeping_barber2();
-  test_sleeping_barber3();
-  test_sleeping_barber4();
-
-  sema_release(&s_barber_ready);
-  sema_release(&s_cust_waiting);
-  sema_release(&s_seats);
+  // test_sleeping_barber2();
+  // test_sleeping_barber3();
+  // test_sleeping_barber4();
 }
 
 int main(int argc, char **argv) {
   thread_init();
-  test_producer();
+  // test_producer1();
+  // test_producer2();
+  // test_producer3();
+  //test_producer4();
   test_sleeping_barber();
   thread_exit();
   return 0;
