@@ -28,6 +28,10 @@
 
 #define MAX_PROCS		100			// maximum #processes
 
+#ifdef HW_MLFQ
+	#define MLFQ_LEVELS		3 			// #levels in MLFQ
+#endif 
+
 /* The process that is currently running.  This variable is external
  * and can be used by other modules.
  */
@@ -36,8 +40,12 @@ struct process *proc_current;
 
 /* Run (aka ready) queue.
  */
-static struct queue proc_runnable;
-
+#ifdef HW_MLFQ
+	static struct queue proc_runnable_mlfq[MLFQ_LEVELS];
+	static struct int quantums[MLFQ_LEVELS] = {10, 20, 30};
+#else
+	static struct queue proc_runnable;
+#endif 
 
 /* A frame is a physical page.
  */
@@ -84,9 +92,18 @@ static void proc_cleanup(){
 
 	/* Release the run queue.
 	 */
-	while (queue_get(&proc_runnable) != 0)
-	 	;
-	queue_release(&proc_runnable);
+	#ifdef HW_MLFQ
+		int cur_lv = 0; 
+		while (cur_lv < MLFQ_LEVELS) {
+			while (queue_get(&proc_runnable_mlfq[cur_lv]) != 0)
+				;
+			cur_lv++; 
+		}
+	#else
+		while (queue_get(&proc_runnable) != 0)
+			;
+		queue_release(&proc_runnable);
+	#endif 
 
 	// my_dump(false);		// print info about allocated memory
 }
@@ -600,13 +617,27 @@ void proc_yield(void){
 
 		/* See if there are other processes to run.  If so, we're done.
 		 */
-		while ((proc_next = queue_get(&proc_runnable)) != 0) {
-			if (proc_next->state == PROC_RUNNABLE) {
-				break;
+		#ifdef HW_MLFQ
+			int cur_lv = 0; 
+			while (cur_lv < MLFQ_LEVELS) {
+				if((proc_next = queue_get(&proc_runnable_mlfq[cur_lv])) != 0){
+					if (proc_next->state == PROC_RUNNABLE) {
+						break;
+					}
+					assert(proc_next->state == PROC_ZOMBIE);
+					proc_release(proc_next);
+				}
+				cur_lv++;
 			}
-			assert(proc_next->state == PROC_ZOMBIE);
-			proc_release(proc_next);
-		}
+		#else
+			while ((proc_next = queue_get(&proc_runnable)) != 0) {
+				if (proc_next->state == PROC_RUNNABLE) {
+					break;
+				}
+				assert(proc_next->state == PROC_ZOMBIE);
+				proc_release(proc_next);
+			}
+		#endif
 
 		/* There should always be at least one process.
 		 */
