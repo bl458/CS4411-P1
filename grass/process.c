@@ -131,6 +131,10 @@ struct process *proc_alloc(gpid_t owner, char *descr, unsigned int uid){
 	p->owner = owner;
 	snprintf(p->descr, sizeof(p->descr), "K %s", descr);
 	p->state = PROC_RUNNABLE;
+	#ifdef HW_MLFQ 
+		p->ticks_left = quantums[0];
+		p->priority_level = 0;
+	#endif
 	proc_nprocs++;
 	proc_nrunnable++;
 
@@ -185,8 +189,13 @@ static void proc_release(struct process *proc){
 /* Put the current process on the run queue.
  */
 static void proc_to_runqueue(struct process *p){
-	assert(p->state == PROC_RUNNABLE);
-	queue_add(&proc_runnable, p);
+	#ifdef HW_MLFQ
+		assert(p->state == PROC_WAITING);
+		queue_add(&proc_runnable_mlfq[p->priority_level], p);
+	#else 
+		assert(p->state == PROC_RUNNABLE);
+		queue_add(&proc_runnable, p);
+	#endif 
 }
 
 /* Find a process by process id.
@@ -621,7 +630,7 @@ void proc_yield(void){
 			int cur_lv = 0; 
 			while (cur_lv < MLFQ_LEVELS) {
 				if((proc_next = queue_get(&proc_runnable_mlfq[cur_lv])) != 0){
-					if (proc_next->state == PROC_RUNNABLE) {
+					if (proc_next->state == PROC_RUNNABLE && proc_next->ticks_left > 0) {
 						break;
 					}
 					assert(proc_next->state == PROC_ZOMBIE);
@@ -832,6 +841,13 @@ void proc_got_interrupt(){
 		proc_syscall();
 		break;
 	case INTR_CLOCK:
+		/* TODO -1 on ticks_left */
+		#ifdef HW_MLFQ
+			proc_current->ticks_left -= 1; 
+			if (proc_current->ticks_left == 0 && proc_current->priority_level < MLFQ_LEVELS) {
+				proc_current->priority_level += 1;
+			}
+		#endif 
 		proc_yield();
 		break;
 	case INTR_IO:
@@ -948,7 +964,13 @@ void proc_initialize(void){
 
 	/* Initialize the run queue (aka ready queue).
 	 */
-	queue_init(&proc_runnable);
+	#ifdef HW_MLFQ 
+		for (i = 0; i < MLFQ_LEVELS; i++) {
+			queue_init(&proc_runnable_mlfq[i]);
+		}
+	#else 
+		queue_init(&proc_runnable);
+	#endif 
 
 	/* Allocate a process record for the current process.
 	 */

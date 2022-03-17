@@ -64,6 +64,11 @@ struct process {
 		PROC_RUNNABLE,			// can be run (or is running)
 		PROC_WAITING,			// waiting for message
 		PROC_ZOMBIE				// dead but not cleaned up
+	
+	#ifdef HW_MLFQ
+		int ticks_left;  
+		int priority_level;
+	#endif 
 	} state;
 
 	/* Message queues for synchronization between processes.
