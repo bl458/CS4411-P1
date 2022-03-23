@@ -37,7 +37,7 @@
  */
 struct process *proc_current;
 
-/* Run (aka ready) queue.
+/* Run (aka ready) queue.F
  */
 #ifdef HW_MLFQ
 static struct queue proc_runnable_mlfq[MLFQ_LEVELS];
@@ -128,6 +128,7 @@ struct process *proc_alloc(gpid_t owner, char *descr, unsigned int uid) {
   p->state = PROC_RUNNABLE;
 #ifdef HW_MLFQ
   p->ticks_left = quantums[0];
+  assert(p->ticks_left == 10 || p->ticks_left == 20 || p->ticks_left == 30);
   p->priority_level = 0;
 #endif
   proc_nprocs++;
@@ -185,11 +186,11 @@ static void proc_release(struct process *proc) {
  */
 static void proc_to_runqueue(struct process *p) {
   assert(p->state == PROC_RUNNABLE);
-#ifdef HW_MLFQ
-  queue_add(&proc_runnable_mlfq[p->priority_level], p);
-#else
-  queue_add(&proc_runnable, p);
-#endif
+  #ifdef HW_MLFQ
+    queue_add(&proc_runnable_mlfq[p->priority_level], p);
+  #else
+    queue_add(&proc_runnable, p);
+  #endif
 }
 
 /* Find a process by process id.
@@ -599,6 +600,7 @@ void proc_yield(void) {
   /* Try to find a process to run.
    */
   for (;;) {
+    // printf("Entered for loop ");
     /* First check if there are any processes waiting for a timeout
      * that are now runnable.  Also keep track of how long until
      * the next timeout, if any.
@@ -627,10 +629,9 @@ void proc_yield(void) {
  */
 #ifdef HW_MLFQ
     int cur_lv = 0;
+    bool do_break = false;
     while (cur_lv < MLFQ_LEVELS) {
-      bool do_break = false;
       while ((proc_next = queue_get(&proc_runnable_mlfq[cur_lv])) != 0) {
-
         if (proc_next->state == PROC_RUNNABLE) {
           do_break = true;
           break;
@@ -661,6 +662,10 @@ void proc_yield(void) {
     /* See if we found a suitable process to schedule.
      */
     if (proc_next != 0) {
+      #ifdef HW_MLFQ
+        proc_next->ticks_left = quantums[proc_next->priority_level];
+        assert(proc_next->ticks_left == 10 || proc_next->ticks_left == 20 || proc_next->ticks_left == 30);
+      #endif
       break;
     }
 
@@ -692,10 +697,6 @@ void proc_yield(void) {
   }
   assert(proc_next->pid != proc_current->pid);
   assert(proc_next->state == PROC_RUNNABLE);
-
-#ifdef HW_MLFQ
-  proc_next->ticks_left = quantums[proc_next->priority_level];
-#endif
 
   /* Make sure the current process is schedulable.
    */
@@ -844,15 +845,20 @@ void proc_got_interrupt() {
     proc_syscall();
     break;
   case INTR_CLOCK:
-/* TODO -1 on ticks_left */
-#ifdef HW_MLFQ
-    proc_current->ticks_left -= 1;
-    if (proc_current->ticks_left == 0 &&
-        proc_current->priority_level < MLFQ_LEVELS) {
-      proc_current->priority_level += 1;
-    }
-#endif
-    proc_yield();
+    #ifdef HW_MLFQ
+      proc_current->ticks_left -= 1;
+      if (proc_current->ticks_left == 0) {
+        if (proc_current->priority_level < MLFQ_LEVELS - 1) {
+          proc_current->priority_level += 1;
+        }
+
+        proc_current->ticks_left = quantums[proc_current->priority_level];
+        proc_yield();
+      }
+    #else 
+      proc_yield();
+    #endif
+
     break;
   case INTR_IO:
     /* There might be a process that is now runnable.
@@ -880,8 +886,8 @@ void proc_dump(void) {
     }
     printf("%4u: %-12.12s %3u ", p->pid, p->descr, p->uid);
 #ifdef HW_MLFQ
-    printf("Priority level: %u", p->priority_level);
-    printf("Ticks_remaining: %u", p->ticks_left);
+    printf("Priority level: %d ", p->priority_level);
+    printf("Ticks left: %d ", p->ticks_left);
 #endif
 
     switch (p->state) {
