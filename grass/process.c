@@ -630,6 +630,7 @@ void proc_yield(void) {
     while (cur_lv < MLFQ_LEVELS) {
       bool do_break = false;
       while ((proc_next = queue_get(&proc_runnable_mlfq[cur_lv])) != 0) {
+        
         if (proc_next->state == PROC_RUNNABLE) {
           do_break = true;
           break;
@@ -878,6 +879,9 @@ void proc_dump(void) {
       continue;
     }
     printf("%4u: %-12.12s %3u ", p->pid, p->descr, p->uid);
+    printf("Priority level: %u", p->priority_level);
+    printf("Ticks_remaining: %u", p->ticks_left);
+
     switch (p->state) {
     case PROC_RUNNABLE:
       if (p == proc_current) {
