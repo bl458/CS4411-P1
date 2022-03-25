@@ -36,12 +36,6 @@
 #define ALPHA 0.01
 #endif
 
-/* 
-1. how to run script.bat 
-2. advice on setting up another experiment 
-3. moving avg values converge to 0 (no loop) or 2 (loop)  
-*/
-
 /* The process that is currently running.  This variable is external
  * and can be used by other modules.
  */
@@ -57,9 +51,8 @@ static struct queue proc_runnable;
 #endif
 
 #ifdef HW_MEASURE
-struct ema_state es;  
-#endif 
-
+struct ema_state es;
+#endif
 
 /* A frame is a physical page.
  */
@@ -205,11 +198,11 @@ static void proc_release(struct process *proc) {
  */
 static void proc_to_runqueue(struct process *p) {
   assert(p->state == PROC_RUNNABLE);
-  #ifdef HW_MLFQ
-    queue_add(&proc_runnable_mlfq[p->priority_level], p);
-  #else
-    queue_add(&proc_runnable, p);
-  #endif
+#ifdef HW_MLFQ
+  queue_add(&proc_runnable_mlfq[p->priority_level], p);
+#else
+  queue_add(&proc_runnable, p);
+#endif
 }
 
 /* Find a process by process id.
@@ -369,12 +362,13 @@ static void proc_wakeup(struct process *p) {
  * the owner of the process.
  */
 void proc_term(struct process *proc, int status) {
-  #ifdef HW_MEASURE
-    int end_time = sys_gettime();
-    int duration = end_time - proc->init_time;
-    // printf("end_time: %d, init_time: %d ", end_time, proc->init_time);
-    printf("process %d died after %d ticks, %d yields, %d milliseconds ", proc->pid, proc->tick_count, proc->yield_count, duration);
-  #endif
+#ifdef HW_MEASURE
+  int end_time = sys_gettime();
+  int duration = end_time - proc->init_time;
+  // printf("end_time: %d, init_time: %d ", end_time, proc->init_time);
+  printf("process %d died after %d ticks, %d yields, %d milliseconds\n\r",
+         proc->pid, proc->tick_count, proc->yield_count, duration);
+#endif
 
   assert(proc_nprocs > 0);
 
@@ -688,13 +682,14 @@ void proc_yield(void) {
     /* See if we found a suitable process to schedule.
      */
     if (proc_next != 0) {
-      #ifdef HW_MEASURE
-        proc_current->yield_count += 1;
-      #endif
-      #ifdef HW_MLFQ
-        proc_next->ticks_left = quantums[proc_next->priority_level];
-        assert(proc_next->ticks_left == 10 || proc_next->ticks_left == 20 || proc_next->ticks_left == 30);
-      #endif
+#ifdef HW_MEASURE
+      proc_current->yield_count += 1;
+#endif
+#ifdef HW_MLFQ
+      proc_next->ticks_left = quantums[proc_next->priority_level];
+      assert(proc_next->ticks_left == 10 || proc_next->ticks_left == 20 ||
+             proc_next->ticks_left == 30);
+#endif
       break;
     }
 
@@ -717,9 +712,9 @@ void proc_yield(void) {
     /* No luck.  We'll wait for a while.
      */
     earth.intr.suspend(next - now);
-    #ifdef HW_MEASURE
+#ifdef HW_MEASURE
     ema_update(&es, proc_nrunnable);
-    #endif
+#endif
   }
 
   assert(proc_next != proc_current);
@@ -877,22 +872,22 @@ void proc_got_interrupt() {
     proc_syscall();
     break;
   case INTR_CLOCK:
-    #ifdef HW_MEASURE
-      proc_current->tick_count += 1;
-      ema_update(&es, proc_nrunnable);
-    #endif
-    #ifdef HW_MLFQ
-      proc_current->ticks_left -= 1;
-      if (proc_current->ticks_left == 0) {
-        if (proc_current->priority_level < MLFQ_LEVELS - 1) {
-          proc_current->priority_level += 1;
-        }
-
-        proc_yield();
+#ifdef HW_MEASURE
+    proc_current->tick_count += 1;
+    ema_update(&es, proc_nrunnable);
+#endif
+#ifdef HW_MLFQ
+    proc_current->ticks_left -= 1;
+    if (proc_current->ticks_left == 0) {
+      if (proc_current->priority_level < MLFQ_LEVELS - 1) {
+        proc_current->priority_level += 1;
       }
-    #else 
+
       proc_yield();
-    #endif
+    }
+#else
+    proc_yield();
+#endif
 
     break;
   case INTR_IO:
@@ -909,13 +904,13 @@ void proc_got_interrupt() {
  */
 void proc_dump(void) {
   struct process *p;
-  #ifdef HW_MEASURE
+#ifdef HW_MEASURE
   printf("%u processes (current = %u, nrunnable = %u, load = %.2f", proc_nprocs,
-        proc_current->pid, proc_nrunnable, ema_avg(&es));
-  #else
+         proc_current->pid, proc_nrunnable, ema_avg(&es));
+#else
   printf("%u processes (current = %u, nrunnable = %u", proc_nprocs,
          proc_current->pid, proc_nrunnable);
-  #endif
+#endif
   printf("):\n\r");
 
   printf("PID   DESCRIPTION  UID STATUS      RES SWP OWNER ALARM   EXEC\n\r");
@@ -1028,7 +1023,7 @@ void proc_initialize(void) {
 
 #ifdef HW_MEASURE
   ema_init(&es, ALPHA);
-#endif 
+#endif
 
   /* Allocate a process record for the current process.
    */
