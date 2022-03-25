@@ -71,6 +71,12 @@ struct process {
   int priority_level;
 #endif
 
+#ifdef HW_MEASURE
+  int init_time;
+  int tick_count;
+  int yield_count;
+#endif
+
   /* Message queues for synchronization between processes.
    */
   struct msg_queue mboxes[MSG_NTYPES];
