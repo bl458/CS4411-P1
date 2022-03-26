@@ -682,14 +682,12 @@ void proc_yield(void) {
     /* See if we found a suitable process to schedule.
      */
     if (proc_next != 0) {
-#ifdef HW_MEASURE
-      proc_current->yield_count += 1;
-#endif
-#ifdef HW_MLFQ
-      proc_next->ticks_left = quantums[proc_next->priority_level];
-      assert(proc_next->ticks_left == 10 || proc_next->ticks_left == 20 ||
-             proc_next->ticks_left == 30);
-#endif
+      #ifdef HW_MLFQ
+        proc_next->ticks_left = quantums[proc_next->priority_level];
+      #endif
+      #ifdef HW_MEASURE
+        proc_current->yield_count += 1;
+      #endif
       break;
     }
 
