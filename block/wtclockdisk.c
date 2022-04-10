@@ -150,7 +150,7 @@ block_if wtclockdisk_init(block_if below, block_t *blocks, block_no nblocks){
 	for (int i=0; i < nblocks; i++) {
 		cs->metadatas[i] = malloc(sizeof(struct block_info));
 	}
-	cs->clock_hand = 0
+	cs->clock_hand = 0;
 	
 	/* Return a block interface to this inode.
 	 */
