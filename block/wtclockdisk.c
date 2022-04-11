@@ -12,9 +12,9 @@
 /* State contains the pointer to the block module below as well as caching
  * information and caching statistics.
  */
-
+// Todo: How do we test? 
 struct block_info {
-	int use_bit;
+	unsigned int use_bit;
 	unsigned int ino;
 	unsigned int offset; 
 };
@@ -45,11 +45,12 @@ static int wtclockdisk_getsize(block_if bi, unsigned int ino){
 
 static int wtclockdisk_setsize(block_if bi, unsigned int ino, block_no nblocks){
 	struct wtclockdisk_state *cs = bi->state;
+	// Todo: How do you do this? Do u modify nblocks?  	
 
 	return (*cs->below->setsize)(cs->below, ino, nblocks);
 }
 
-static int wtclockdisk_read(block_if bi, unsigned int ino, block_no offset, block_t *block){
+static int wtclockdisk_read(block_if bi, unsigned int ino, block_no offset, block_t *block) {
 	struct wtclockdisk_state *cs = bi->state;
 	int i = 0; 
 	while (i < nblocks) {
@@ -77,10 +78,24 @@ static int wtclockdisk_read(block_if bi, unsigned int ino, block_no offset, bloc
 }
 
 static int wtclockdisk_write(block_if bi, unsigned int ino, block_no offset, block_t *block){
-	/* Your code should replace this naive implementation
-	 */
-	
 	struct wtclockdisk_state *cs = bi->state;
+	int i = 0; 
+	while (i < nblocks) {
+		if (metadatas[i]->ino == ino && metadatas[i]->offset == offset){
+			break;
+		}
+
+		i += 1; 
+	}
+
+	if (i == nblocks) {
+		write_miss += 1;
+		cache_update(cs, ino, offset, block); 
+	}
+	else {
+		write_hit += 1; 
+		memcpy(blocks->bytes[i], block, BLOCK_SIZE);
+	}
 
 	return (*cs->below->write)(cs->below, ino, offset, block);
 }
@@ -106,7 +121,7 @@ void wtclockdisk_dump_stats(block_if bi){
 }
 
 static void cache_update(wtclockdisk_state *cs, unsigned int ino, block_no offset, block_t *block) {	
-	//Update the slot *cs->metadatas, clock_hand  
+	//Find slot in the clock to update at by moving clock_hand
 	while (true) {
 		if (metadatas[clock_hand]->use_bit == 0) {
 			break; 
@@ -125,7 +140,7 @@ static void cache_update(wtclockdisk_state *cs, unsigned int ino, block_no offse
 	// Todo ask if this is correct 
 	memcpy(&cs->blocks->bytes[clock_hand], block, BLOCK_SIZE);
 
-	// Edit slot metadatas[clock_hand]
+	// Edit slot in the clock
 	metadatas[clock_hand]->use_bit = 1; 
 	metadatas[clock_hand]->ino = ino; 
 	metadatas[clock_hand]->offset = offset; 
