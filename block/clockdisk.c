@@ -44,7 +44,7 @@ struct clockdisk_state {
 
 static void cache_update(struct clockdisk_state *cs, unsigned int ino,
                          block_no offset, block_t *block) {
-  // Find slot in the clock to update at by moving clock_hand
+  // Find slot in the clock to update by moving clock_hand
   for (;;) {
     if (cs->metadatas[cs->clock_hand].recent_bit == 0) {
       break;
@@ -58,13 +58,21 @@ static void cache_update(struct clockdisk_state *cs, unsigned int ino,
     }
   }
 
+  // If dirty, write to disk
+  if (cs->metadatas[cs->clock_hand].dirty_bit == 1 &&
+      cs->metadatas[cs->clock_hand].use_bit == 1) {
+    (*cs->below->write)(cs->below, cs->metadatas[cs->clock_hand].ino,
+                        cs->metadatas[cs->clock_hand].offset,
+                        &cs->blocks[cs->clock_hand]);
+  }
+
   // Edit acutal cache memory
-  // Todo ask if this is correct
   memcpy(&cs->blocks[cs->clock_hand], block, BLOCK_SIZE);
 
   // Edit slot in the clock
   cs->metadatas[cs->clock_hand].use_bit = 1;
   cs->metadatas[cs->clock_hand].recent_bit = 1;
+  cs->metadatas[cs->clock_hand].dirty_bit = 1;
   cs->metadatas[cs->clock_hand].ino = ino;
   cs->metadatas[cs->clock_hand].offset = offset;
 }
@@ -89,6 +97,7 @@ static int clockdisk_setsize(block_if bi, unsigned int ino, block_no nblocks) {
     }
   }
 
+  // Update disk
   return (*cs->below->setsize)(cs->below, ino, nblocks);
 }
 
@@ -137,9 +146,9 @@ static int clockdisk_write(block_if bi, unsigned int ino, block_no offset,
   } else {
     cs->write_hit += 1;
     memcpy(&cs->blocks[i], block, BLOCK_SIZE);
+    cs->metadatas[i].dirty_bit = 1;
   }
 
-  cs->metadatas[i].dirty_bit = 1;
   return 0;
 }
 
@@ -156,7 +165,7 @@ static int clockdisk_sync(block_if bi, unsigned int ino) {
     }
   }
 
-  return 0;
+  return (*cs->below->sync)(cs->below, ino);
 }
 
 static void clockdisk_release(block_if bi) {
@@ -193,6 +202,7 @@ block_if clockdisk_init(block_if below, block_t *blocks, block_no nblocks) {
   for (int i = 0; i < cs->nblocks; i++) {
     cs->metadatas[i].use_bit = 0;
     cs->metadatas[i].recent_bit = 0;
+    cs->metadatas[i].dirty_bit = 0;
   }
   cs->clock_hand = 0;
 
