@@ -88,7 +88,7 @@ static int wtclockdisk_read(block_if bi, unsigned int ino, block_no offset,
   struct wtclockdisk_state *cs = bi->state;
   int i = 0;
   while (i < cs->nblocks) {
-    if (cs->metadatas[i].ino == ino && cs->metadatas[i].offset == offset) {
+    if (cs->metadatas[i].ino == ino && cs->metadatas[i].offset == offset && cs->metadatas[i].use_bit == 1) {
       break;
     }
 
@@ -115,7 +115,7 @@ static int wtclockdisk_write(block_if bi, unsigned int ino, block_no offset,
   struct wtclockdisk_state *cs = bi->state;
   int i = 0;
   while (i < cs->nblocks) {
-    if (cs->metadatas[i].ino == ino && cs->metadatas[i].offset == offset) {
+    if (cs->metadatas[i].ino == ino && cs->metadatas[i].offset == offset && cs->metadatas[i].use_bit == 1) {
       break;
     }
 
@@ -188,3 +188,4 @@ block_if wtclockdisk_init(block_if below, block_t *blocks, block_no nblocks) {
   bi->sync = wtclockdisk_sync;
   return bi;
 }
+
