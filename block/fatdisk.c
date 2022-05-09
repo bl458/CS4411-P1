@@ -61,9 +61,72 @@ static int fatdisk_get_snapshot(struct fatdisk_snapshot *snapshot,
 /* Create a new FAT file system on the specified inode of the block store below
  */
 int fatdisk_create(block_store_t *below, unsigned int below_ino, unsigned int ninodes) {
-    /* Your code goes here:
-     */
-    panic("Fatdisk create not implemented!");
+    union fatdisk_block f_block_check;
+    if ((*below->read)(below, below_ino, 0, &f_block_check.datablock) == -1) {
+        return -1; 
+    }
+    if (f_block_check.superblock.n_inodeblocks != 0) {
+        return 0;
+    }
+        
+    int total_blocks = (*below->getsize)(below, below_ino);
+    int num_inodeblocks;
+    if(ninodes%INODES_PER_BLOCK == 0){
+        num_inodeblocks = ninodes/INODES_PER_BLOCK;
+    }
+    else{
+        num_inodeblocks = ninodes/INODES_PER_BLOCK + 1;
+    }
+    
+    int remainder = total_blocks - num_inodeblocks - 1;
+    int full_fatblocks = remainder/(1 + FAT_PER_BLOCK);
+    remainder -= full_fatblocks;
+    int num_fatblocks;
+    int num_fatentries;
+    if(remainder > 0){
+        num_fatblocks = full_fatblocks + 1;
+        num_fatentries = full_fatblocks * FAT_PER_BLOCK + remainder - 1;
+    }
+    else{
+        num_fatblocks = full_fatblocks;
+        num_fatentries = full_fatblocks * FAT_PER_BLOCK;
+    }
+
+    union fatdisk_block f_block_inode;
+    for (int i=0; i<INODES_PER_BLOCK; i++) {
+        f_block_inode.inodeblock.inodes[i].head = -1; 
+        f_block_inode.inodeblock.inodes[i].nblocks = 0; 
+    }
+
+    int offset = 1; 
+    for(int i=0; i<num_inodeblocks; i++) {
+        if ((*below->write)(below, below_ino, offset, &f_block_inode.datablock) == -1) {
+            return -1; 
+        }
+        offset += 1; 
+    }
+
+    offset = 1 + n_inodeblocks;
+    for(int i=0; i<num_fatblocks; i++) {
+        union fatdisk_block f_block_fat;
+        for(int j=0; j<FAT_PER_BLOCK; j++){
+            if (i * FAT_PER_BLOCK + j >= num_fatentries) {
+                //TODO ask 
+                f_block_fat.fatblock.entries[j].next = -1;
+            }
+            else {
+                f_block_fat.fatblock.entries[j].next = i * FAT_PER_BLOCK + j + 1;  
+            }
+        }
+
+        if ((*below->write)(below, below_ino, offset, &f_block_inode.datablock) == -1) {
+            return -1; 
+        }
+
+        offset += 1; 
+    }
+
+    return 0;
 }
 
 
