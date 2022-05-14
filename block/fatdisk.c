@@ -111,8 +111,8 @@ int fatdisk_create(block_store_t *below, unsigned int below_ino,
     offset += 1;
   }
 
-  offset = 1 + n_inodeblocks;
-  next = 1;
+  offset = 1 + num_inodeblocks;
+  int next = 1;
   for (int i = 0; i < num_fatblocks; i++) {
     union fatdisk_block f_block_fat;
     for (int j = 0; j < FAT_PER_BLOCK; j++) {
@@ -145,16 +145,93 @@ int fatdisk_create(block_store_t *below, unsigned int below_ino,
 
 static void fatdisk_free_file(struct fatdisk_snapshot *snapshot,
                               struct fatdisk_state *fs) {
-  /* Your code goes here:
-   */
+  // struct fatdisk_snapshot cur_snapshot;
+  // if (fatdisk_get_snapshot(&cur_snapshot, fs, ino) < 0) {
+  //   return -1;
+  // }
 }
 
 /* Write *block at the given block number 'offset'.
  */
 static int fatdisk_write(block_store_t *this_bs, unsigned int ino,
                          block_no offset, block_t *block) {
-  /* Your code goes here:
-   */
+  struct fatdisk_state *fs = this_bs->state;
+  struct fatdisk_snapshot snapshot;
+  if (offset >= snapshot.inode->nblocks) {
+    if (fatdisk_get_snapshot(&snapshot, fs, ino) < 0) {
+      return -1;
+    }
+
+    // Expand fs
+    fatentry_no head = snapshot.superblock.superblock.fat_free_list;
+    fatentry_no tail = snapshot.superblock.superblock.fat_free_list;
+    fatentry_no prev_last = snapshot.superblock.superblock.fat_free_list;
+    for (int i = 0; i <= snapshot.inode->nblocks - 1; i++) {
+      union fatdisk_block fat;
+      int fat_offset = 1 + snapshot.superblock.superblock.n_inodeblocks +
+                       prev_last / FAT_PER_BLOCK;
+      if ((fs->below->read)(fs->below, fs->below_ino, fat_offset,
+                            &fat.datablock) == -1) {
+        return -1;
+      }
+
+      if (i == snapshot.inode->nblocks - 1) {
+        fat.fatblock.entries[prev_last % FAT_PER_BLOCK].next = head;
+      } else {
+        prev_last = fat.fatblock.entries[prev_last % FAT_PER_BLOCK].next;
+      }
+    }
+
+    for (int i = 0; i <= offset - snapshot.inode->nblocks; i++) {
+      union fatdisk_block fat;
+      int fat_offset = 1 + snapshot.superblock.superblock.n_inodeblocks +
+                       tail / FAT_PER_BLOCK;
+      if ((fs->below->read)(fs->below, fs->below_ino, fat_offset,
+                            &fat.datablock) == -1) {
+        return -1;
+      }
+
+      if (i == offset - snapshot.inode->nblocks) {
+        snapshot.superblock.superblock.fat_free_list =
+            fat.fatblock.entries[tail % FAT_PER_BLOCK].next;
+        fat.fatblock.entries[tail % FAT_PER_BLOCK].next = -1;
+      } else {
+        tail = fat.fatblock.entries[tail % FAT_PER_BLOCK].next;
+      }
+    }
+
+    snapshot.inodeblock.inodeblock.inodes[snapshot.inode_no].nblocks =
+        offset + 1;
+    if (snapshot.inodeblock.inodeblock.inodes[snapshot.inode_no].head == -1) {
+      snapshot.inodeblock.inodeblock.inodes[snapshot.inode_no].head = head;
+    }
+  }
+
+  if (fatdisk_get_snapshot(&snapshot, fs, ino) < 0) {
+    return -1;
+  }
+
+  fatentry_no f_entry_no = snapshot.inode->head;
+  for (int i = 0; i < offset; i++) {
+    union fatdisk_block fat;
+    int fat_offset = 1 + snapshot.superblock.superblock.n_inodeblocks +
+                     f_entry_no / FAT_PER_BLOCK;
+    if ((fs->below->read)(fs->below, fs->below_ino, fat_offset,
+                          &fat.datablock) == -1) {
+      return -1;
+    }
+
+    f_entry_no = fat.fatblock.entries[f_entry_no % FAT_PER_BLOCK].next;
+  }
+
+  int datablock_offset = 1 + snapshot.superblock.superblock.n_inodeblocks +
+                         snapshot.superblock.superblock.n_fatblocks +
+                         f_entry_no;
+  if ((fs->below->write)(fs->below, fs->below_ino, datablock_offset, block) ==
+      -1) {
+    return -1;
+  }
+
   return 0;
 }
 
@@ -168,25 +245,28 @@ static int fatdisk_read(block_store_t *this_bs, unsigned int ino,
     return -1;
   }
 
-  if (offset >= snapshot->inode.nblocks) {
+  if (offset >= snapshot.inode->nblocks) {
     return -1;
   }
 
-  fatentry_no f_entry_no = snapshot->inode.head;
+  fatentry_no f_entry_no = snapshot.inode->head;
   for (int i = 0; i < offset; i++) {
     union fatdisk_block fat;
-    int fat_offset =
-        1 + snapshot.superblock.n_inodeblocks + f_entry_no / FAT_PER_BLOCK;
-    if ((fs->below->read)(fs->below, fs->below_ino, fat_offset, fat) == -1) {
+    int fat_offset = 1 + snapshot.superblock.superblock.n_inodeblocks +
+                     f_entry_no / FAT_PER_BLOCK;
+    if ((fs->below->read)(fs->below, fs->below_ino, fat_offset,
+                          &fat.datablock) == -1) {
       return -1;
     }
 
     f_entry_no = fat.fatblock.entries[f_entry_no % FAT_PER_BLOCK].next;
   }
 
-  int datablock_offset = 1 + snapshot.superblock.n_inodeblocks +
-                         snapshot.superblock.n_fatblocks + f_entry_no;
-  if ((*fs->read)(fs->below, fs->below_ino, datablock_offset, &block) == -1) {
+  int datablock_offset = 1 + snapshot.superblock.superblock.n_inodeblocks +
+                         snapshot.superblock.superblock.n_fatblocks +
+                         f_entry_no;
+  if ((*fs->below->read)(fs->below, fs->below_ino, datablock_offset, &block) ==
+      -1) {
     return -1;
   }
 
@@ -248,7 +328,7 @@ static int fatdisk_sync(block_if bi, unsigned int ino) {
   return (*fs->below->sync)(fs->below, fs->below_ino);
 }
 
-static int ceil_int(int a, int b) { return a / b + int(a % b != 0); }
+static int ceil_int(int a, int b) { return a / b + (int)a % b != 0; }
 
 /* Open a new virtual block store at the given inode number of block store
  * "below".

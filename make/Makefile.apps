@@ -32,7 +32,7 @@ build/lib/%.o: src/block/%.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 build/tools/mkfs: src/apps/mkfs.c src/block/filedisk.c src/block/clockdisk.c src/block/treedisk.c src/block/fatdisk.c src/block/unixdisk.c
-	$(CC) -o build/tools/mkfs -Isrc/h src/apps/mkfs.c src/block/filedisk.c src/block/clockdisk.c src/block/treedisk.c src/block/fatdisk.c src/block/unixdisk.c
+	$(CC) -o build/tools/mkfs -DHW_FS -Isrc/h src/apps/mkfs.c src/block/filedisk.c src/block/clockdisk.c src/block/treedisk.c src/block/fatdisk.c src/block/unixdisk.c 
 
 tcc_install: lib/crt0.o lib/end.o lib/libgrass.a bin/tcc.exe
 	cp lib/crt0.o lib/end.o lib/libgrass.a bin/tcc.exe tcc_build/lib/tcc/libtcc1.a tcc
